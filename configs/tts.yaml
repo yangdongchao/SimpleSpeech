@@ -1,0 +1,116 @@
+model:
+  base_learning_rate: 3.0e-06
+  target: ldm.models.diffusion.ddpm_audio.LatentDiffusion_audio
+  params:
+    linear_start: 0.00085
+    linear_end: 0.012
+    num_timesteps_cond: 1
+    log_every_t: 200
+    timesteps: 1000
+    first_stage_key: image
+    cond_stage_key: caption
+    speaker_prompt: True
+    mel_dim: 32
+    mel_length: 500
+    channels: 0
+    cond_stage_trainable: False
+    conditioning_key: crossattn
+    monitor: val/loss_simple_ema
+    scale_by_std: true
+    use_ema: false
+    scheduler_config:
+      target: ldm.lr_scheduler.LambdaLinearScheduler
+      params:
+        warm_up_steps:
+        - 10000
+        cycle_lengths:
+        - 10000000000000
+        f_start:
+        - 1.0e-06
+        f_max:
+        - 1.0
+        f_min:
+        - 1.0
+    unet_config:
+      target: ldm.modules.diffusionmodules.concatDiT.ConcatDiT2MLP_one
+      params:
+        in_channels: 32
+        context_dim: 1536
+        hidden_size: 768
+        num_heads: 8
+        depth: 4
+        max_len: 2048
+    first_stage_config:
+      target: ldm.models.scalar16k.ScalarAE
+      params:
+        scalar_config: /home/jupyter/data/checkpoints/codec/16k/config.yaml
+        resume_path: /home/jupyter/data/checkpoints/codec/16k/ckpt_00170000.pth
+        
+    cond_stage_config:
+      target: ldm.modules.encoders.modules.FrozenByT5Embedder
+      params:
+        weights_path: 'none'
+        max_length: 154
+
+    speaker_stage_config:
+      target: ldm.modules.encoders.speaker_encoder.SpeakerEncoder
+      params:
+        freeze: True
+        version: facebook/wav2vec2-large-xlsr-53
+
+lightning:
+  callbacks:
+    image_logger:
+      target: main.AudioCodecLogger
+      params:
+        sample_rate: 16000
+        for_specs: true
+        increase_log_steps: false
+        batch_frequency: 10000
+        max_images: 8
+        melvmin: -5
+        melvmax: 1.5
+        vocoder_cfg:
+          target: ldm.models.scalar16k.ScalarAE
+          params:
+            scalar_config: /home/jupyter/data/checkpoints/codec/16k/config.yaml
+            resume_path: /home/jupyter/data/checkpoints/codec/16k/ckpt_00170000.pth
+  trainer:
+    benchmark: True
+    gradient_clip_val: 1.0
+    replace_sampler_ddp: false
+    accumulate_grad_batches: 1 # the grad accumulate
+  modelcheckpoint:
+    params:
+      monitor: epoch
+      mode: max
+      save_top_k: 10
+      every_n_epochs: 1
+      
+data:
+  target: main.AudioCodecDataModuleFromConfig
+  params:
+    batch_size: 4
+    num_workers: 8
+    main_spec_dir_path: 'tsv_dirs/tts-v1' 
+    other_spec_dir_path: 'tsv_dirs/tts-v1'
+    pad_value: 0.0 
+    sampling_rate: 16000
+    min_factor: 1 
+    min_batch_len: 8000
+    spec_crop_len: 160000 
+    train:
+      target: ldm.data.joinaudiodataset_speech_anylen.JoinSpecsTrain
+      params:
+        specs_dataset_cfg:
+    validation:
+      target: ldm.data.joinaudiodataset_speech_anylen.JoinSpecsValidation
+      params:
+        specs_dataset_cfg:
+        
+test_dataset:
+  target: ldm.data.tsvdataset.TSVDatasetStruct
+  params:
+    tsv_path: none
+    spec_crop_len: 624
+
