@@ -24,7 +24,7 @@ bash eval.sh
 ## Acknowledgement
 
 ## Reference
-If you find this code is usefule for your research. Please cite
+If you find this code is useful for your research. Please cite
 
 @article{simplespeech,
   title={SimpleSpeech: Towards Simple and Efficient Text-to-Speech with Scalar Latent Transformer Diffusion Models},
